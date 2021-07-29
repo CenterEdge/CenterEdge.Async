@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,29 +26,19 @@ namespace CenterEdge.Async
         public static void RunSync(Func<Task> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<Task, VoidTaskResult>(task);
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter>();
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
-                synch.Post(static async state =>
-                {
-                    var synch = (ExclusiveSynchronizationContext<Task, VoidTaskResult>)state!;
+                var awaiter = task().GetAwaiter();
 
-                    try
-                    {
-                        await synch.InitialTask();
-                    }
-                    catch (Exception e)
-                    {
-                        synch.TaskException = e;
-                        throw;
-                    }
-                    finally
-                    {
-                        synch.EndMessageLoop();
-                    }
-                }, synch);
-                synch.BeginMessageLoop();
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+
+                // Throw any exception returned by the task
+                awaiter.GetResult();
             }
             finally
             {
@@ -66,29 +57,19 @@ namespace CenterEdge.Async
         public static void RunSync(Func<ValueTask> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<ValueTask, VoidTaskResult>(task);
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter>();
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
-                synch.Post(static async state =>
-                {
-                    var synch = (ExclusiveSynchronizationContext<ValueTask, VoidTaskResult>)state!;
+                var awaiter = task().GetAwaiter();
 
-                    try
-                    {
-                        await synch.InitialTask();
-                    }
-                    catch (Exception e)
-                    {
-                        synch.TaskException = e;
-                        throw;
-                    }
-                    finally
-                    {
-                        synch.EndMessageLoop();
-                    }
-                }, synch);
-                synch.BeginMessageLoop();
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+
+                // Throw any exception returned by the task
+                awaiter.GetResult();
             }
             finally
             {
@@ -108,31 +89,19 @@ namespace CenterEdge.Async
         public static T RunSync<T>(Func<Task<T>> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<Task<T>, T>(task);
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter<T>>();
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
-                synch.Post(static async state =>
+                var awaiter = task().GetAwaiter();
+
+                if (!awaiter.IsCompleted)
                 {
-                    var synch = (ExclusiveSynchronizationContext<Task<T>, T>)state!;
+                    synch.Run(awaiter);
+                }
 
-                    try
-                    {
-                        synch.Result = await synch.InitialTask();
-                    }
-                    catch (Exception e)
-                    {
-                        synch.TaskException = e;
-                        throw;
-                    }
-                    finally
-                    {
-                        synch.EndMessageLoop();
-                    }
-                }, synch);
-
-                synch.BeginMessageLoop();
-                return synch.Result!;
+                // Throw any exception returned by the task or return the result
+                return awaiter.GetResult();
             }
             finally
             {
@@ -152,31 +121,19 @@ namespace CenterEdge.Async
         public static T RunSync<T>(Func<ValueTask<T>> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<ValueTask<T>, T>(task);
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter<T>>();
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
-                synch.Post(static async state =>
+                var awaiter = task().GetAwaiter();
+
+                if (!awaiter.IsCompleted)
                 {
-                    var synch = (ExclusiveSynchronizationContext<ValueTask<T>, T>)state!;
+                    synch.Run(awaiter);
+                }
 
-                    try
-                    {
-                        synch.Result = await synch.InitialTask();
-                    }
-                    catch (Exception e)
-                    {
-                        synch.TaskException = e;
-                        throw;
-                    }
-                    finally
-                    {
-                        synch.EndMessageLoop();
-                    }
-                }, synch);
-
-                synch.BeginMessageLoop();
-                return synch.Result!;
+                // Throw any exception returned by the task or return the result
+                return awaiter.GetResult();
             }
             finally
             {
@@ -184,19 +141,11 @@ namespace CenterEdge.Async
             }
         }
 
-        private sealed class ExclusiveSynchronizationContext<TTask, TResult> : SynchronizationContext, IDisposable
+        // Note: Sealing this class can help JIT make non-virtual method calls and inlined method calls for virtual methods
+        private sealed class ExclusiveSynchronizationContext<TAwaiter> : SynchronizationContext, IDisposable
+            where TAwaiter : struct, ICriticalNotifyCompletion
         {
-            public Func<TTask> InitialTask { get; }
-            public TResult? Result { get; set; }
-            public Exception? TaskException { get; set; }
-
-            private bool _done;
             private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _items = new();
-
-            public ExclusiveSynchronizationContext(Func<TTask> initialTask)
-            {
-                InitialTask = initialTask;
-            }
 
             public override void Send(SendOrPostCallback d, object? state)
             {
@@ -208,22 +157,22 @@ namespace CenterEdge.Async
                 _items.Add((d, state));
             }
 
-            public void EndMessageLoop()
+            private void EndMessageLoop()
             {
-                Post(static state => ((ExclusiveSynchronizationContext<TTask, TResult>) state!)._done = true, this);
+                Post(static state => ((ExclusiveSynchronizationContext<TAwaiter>) state!)._items.CompleteAdding(), this);
             }
 
-            public void BeginMessageLoop()
+            public void Run(TAwaiter awaiter)
             {
-                while (!_done)
+                // Register a callback to run when the original awaiter is completed
+                // We use UnsafeOnCompleted so it doesn't flow ExecutionContext
+                awaiter.UnsafeOnCompleted(EndMessageLoop);
+
+                while (!_items.IsCompleted)
                 {
                     var task = _items.Take();
 
                     task.Callback(task.State);
-                    if (TaskException != null)
-                    {
-                        throw TaskException;
-                    }
                 }
             }
 
@@ -236,11 +185,6 @@ namespace CenterEdge.Async
             {
                 _items.Dispose();
             }
-        }
-
-        // Placeholder for a task that returns no result
-        private struct VoidTaskResult
-        {
         }
     }
 }

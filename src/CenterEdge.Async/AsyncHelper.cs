@@ -26,7 +26,7 @@ namespace CenterEdge.Async
         public static void RunSync(Func<Task> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter>();
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter>(oldContext);
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
@@ -57,7 +57,7 @@ namespace CenterEdge.Async
         public static void RunSync(Func<ValueTask> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter>();
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter>(oldContext);
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
@@ -89,7 +89,7 @@ namespace CenterEdge.Async
         public static T RunSync<T>(Func<Task<T>> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter<T>>();
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter<T>>(oldContext);
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
@@ -121,7 +121,7 @@ namespace CenterEdge.Async
         public static T RunSync<T>(Func<ValueTask<T>> task)
         {
             var oldContext = SynchronizationContext.Current;
-            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter<T>>();
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter<T>>(oldContext);
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
@@ -145,7 +145,13 @@ namespace CenterEdge.Async
         private sealed class ExclusiveSynchronizationContext<TAwaiter> : SynchronizationContext, IDisposable
             where TAwaiter : struct, ICriticalNotifyCompletion
         {
+            private readonly SynchronizationContext? _parentSynchronizationContext;
             private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _items = new();
+
+            public ExclusiveSynchronizationContext(SynchronizationContext? parentSynchronizationContext)
+            {
+                _parentSynchronizationContext = parentSynchronizationContext;
+            }
 
             public override void Send(SendOrPostCallback d, object? state)
             {
@@ -154,7 +160,42 @@ namespace CenterEdge.Async
 
             public override void Post(SendOrPostCallback d, object? state)
             {
-                _items.Add((d, state));
+                try
+                {
+                    _items.Add((d, state));
+                    return;
+                }
+                catch (InvalidOperationException)
+                {
+                    // This also indicates the items cannot be added because the main loop
+                    // is complete. We can't do a boolean check on IsAddingComplete because
+                    // it will throw an ObjectDisposedException.
+                }
+
+                // The collection is closed to new items because we got done with the main task.
+                // Instead, we post any remaining work to the parent SynchronizationContext.
+                // This can occur if the main task starts additional work which isn't completed
+                // before the main task completes.
+
+                if (_parentSynchronizationContext != null)
+                {
+                    _parentSynchronizationContext.Post(d, state);
+                }
+                else
+                {
+                    // There is no parent sync context, so use the default behavior from the default
+                    // SynchronizationContext and post to the thread pool.
+
+                    #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+                    ThreadPool.QueueUserWorkItem(static s => s.d(s.state), (d, state), preferLocal: false);
+                    #else
+                    ThreadPool.QueueUserWorkItem(static s =>
+                    {
+                        var state = ((SendOrPostCallback d, object? state))s;
+                        state.d(state.state);
+                    }, (d, state));
+                    #endif
+                }
             }
 
             private void EndMessageLoop()

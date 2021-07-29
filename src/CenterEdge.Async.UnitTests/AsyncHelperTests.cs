@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using Xunit;
 
 namespace CenterEdge.Async.UnitTests
@@ -75,6 +76,39 @@ namespace CenterEdge.Async.UnitTests
             Assert.Equal(sync, SynchronizationContext.Current);
         }
 
+        [Fact]
+        public void RunSync_Task_DanglingContinuations_HandledOnParentSyncContext()
+        {
+            // Arrange
+
+            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+            var called = false;
+
+            // Act
+            AsyncHelper.RunSync((Func<Task>)(async () =>
+            {
+                await Task.Yield();
+
+#pragma warning disable 4014
+                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+#pragma warning restore 4014
+            }));
+
+            // Assert
+
+            Assert.False(called);
+
+            Thread.Sleep(500);
+
+            Assert.True(called);
+
+            mockSync.Verify(
+                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+                Times.Once);
+        }
+
         #endregion
 
         #region RunSync_ValueTask
@@ -145,6 +179,39 @@ namespace CenterEdge.Async.UnitTests
             Assert.Equal(sync, SynchronizationContext.Current);
         }
 
+        [Fact]
+        public void RunSync_ValueTask_DanglingContinuations_HandledOnParentSyncContext()
+        {
+            // Arrange
+
+            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+            var called = false;
+
+            // Act
+            AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+            {
+                await Task.Yield();
+
+#pragma warning disable 4014
+                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+#pragma warning restore 4014
+            }));
+
+            // Assert
+
+            Assert.False(called);
+
+            Thread.Sleep(500);
+
+            Assert.True(called);
+
+            mockSync.Verify(
+                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+                Times.Once);
+        }
+
         #endregion
 
         #region RunSync_TaskT
@@ -212,6 +279,41 @@ namespace CenterEdge.Async.UnitTests
             Assert.Equal(sync, SynchronizationContext.Current);
         }
 
+        [Fact]
+        public void RunSync_TaskT_DanglingContinuations_HandledOnParentSyncContext()
+        {
+            // Arrange
+
+            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+            var called = false;
+
+            // Act
+            AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+            {
+                await Task.Yield();
+
+#pragma warning disable 4014
+                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+#pragma warning restore 4014
+
+                return 0;
+            }));
+
+            // Assert
+
+            Assert.False(called);
+
+            Thread.Sleep(500);
+
+            Assert.True(called);
+
+            mockSync.Verify(
+                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+                Times.Once);
+        }
+
         #endregion
 
         #region RunSync_ValueTaskT
@@ -277,6 +379,52 @@ namespace CenterEdge.Async.UnitTests
             // Assert
 
             Assert.Equal(sync, SynchronizationContext.Current);
+        }
+
+        [Fact]
+        public void RunSync_ValueTaskT_DanglingContinuations_HandledOnParentSyncContext()
+        {
+            // Arrange
+
+            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+            var called = false;
+
+            // Act
+            AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+            {
+                await Task.Yield();
+
+#pragma warning disable 4014
+                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+#pragma warning restore 4014
+
+                return 0;
+            }));
+
+            // Assert
+
+            Assert.False(called);
+
+            Thread.Sleep(500);
+
+            Assert.True(called);
+
+            mockSync.Verify(
+                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+                Times.Once);
+        }
+
+        #endregion
+
+        #region Helpers
+
+        private async Task DelayedActionAsync(TimeSpan delay, Action action)
+        {
+            await Task.Delay(delay);
+
+            action.Invoke();
         }
 
         #endregion

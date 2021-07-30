@@ -33,6 +33,28 @@ namespace CenterEdge.Async.UnitTests
         }
 
         [Fact]
+        public void RunSync_Task_ConfigureAwaitFalse_DoesAllTasks()
+        {
+            // Arrange
+
+            var i = 0;
+
+            // Act
+            AsyncHelper.RunSync((Func<Task>)(async () =>
+            {
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+            }));
+
+            // Assert
+
+            Assert.Equal(3, i);
+        }
+
+        [Fact]
         public void RunSync_Task_ExceptionAfterAwait_ThrowsException()
         {
             // Act/Assert
@@ -135,6 +157,30 @@ namespace CenterEdge.Async.UnitTests
             Assert.Equal(3, i);
         }
 
+
+
+        [Fact]
+        public void RunSync_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
+        {
+            // Arrange
+
+            var i = 0;
+
+            // Act
+            AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+            {
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+            }));
+
+            // Assert
+
+            Assert.Equal(3, i);
+        }
+
         [Fact]
         public void RunSync_ValueTask_ExceptionAfterAwait_ThrowsException()
         {
@@ -226,6 +272,25 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10);
                 i += 1;
                 await Task.Delay(10);
+                i += 1;
+                return i;
+            }));
+
+            // Assert
+
+            Assert.Equal(3, result);
+        }
+
+        [Fact]
+        public void RunSync_TaskT_ConfigureAwaitFalse_DoesAllTasks()
+        {
+            // Act
+            var result = AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+            {
+                var i = 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 return i;
             }));
@@ -338,6 +403,25 @@ namespace CenterEdge.Async.UnitTests
         }
 
         [Fact]
+        public void RunSync_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
+        {
+            // Act
+            var result = AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+            {
+                var i = 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+                await Task.Delay(10).ConfigureAwait(false);
+                i += 1;
+                return i;
+            }));
+
+            // Assert
+
+            Assert.Equal(3, result);
+        }
+
+        [Fact]
         public void RunSync_ValueTaskT_ExceptionAfterAwait_ThrowsException()
         {
             // Act/Assert
@@ -419,6 +503,8 @@ namespace CenterEdge.Async.UnitTests
         #endregion
 
         #region Helpers
+
+        private static readonly AsyncLocal<int> asyncLocalField = new();
 
         private async Task DelayedActionAsync(TimeSpan delay, Action action)
         {

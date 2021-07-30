@@ -16,18 +16,6 @@ namespace CenterEdge.Async
     /// </remarks>
     public static class AsyncHelper
     {
-        // We allocate this delegate up-front rather than including it as an inline lambda for a small performance boost.
-        // If placed as a lambda it's lazy initialized, requiring a null check each time. Since we know we're almost always
-        // going to need it we can avoid that check. It's placed in AsyncHelper rather than ExclusiveSynchronizationContext
-        // because it doesn't require the generic type parameter. It expects the BlockingCollection to be passed as the state.
-        private static readonly SendOrPostCallback queueDoneMessage =
-            static state =>
-            {
-                Debug.Assert(state is BlockingCollection<(SendOrPostCallback Callback, object? State)>);
-
-                ((BlockingCollection<(SendOrPostCallback Callback, object? State)>)state!).CompleteAdding();
-            };
-
         /// <summary>
         /// Executes an async <see cref="Task"/> method with no return value synchronously.
         /// </summary>
@@ -214,12 +202,16 @@ namespace CenterEdge.Async
             private void EndMessageLoop()
             {
                 // This method is only called when _items can still accept messages
-                // So we can get a small perf gain by avoiding the virtual method call
-                // and exception handling in the Post method.
-
                 Debug.Assert(!_items.IsAddingCompleted);
 
-                _items.Add((queueDoneMessage, _items));
+                // We could post this onto the queue to be processed, but that's unnecessary because
+                // we're registered via OnCompleted on the awaiter. This will already marshal us onto
+                // this synchronization context.
+                //
+                // If we're already on this synchronization context when the main task completes,
+                // this continuation will be executed inline rather than queued in most cases.
+
+                _items.CompleteAdding();
             }
 
             public void Run(TAwaiter awaiter)

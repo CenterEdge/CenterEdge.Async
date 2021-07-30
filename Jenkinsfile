@@ -34,7 +34,7 @@ pipeline {
 
                 sh "dotnet restore -s https://centeredge.myget.org/F/main/auth/${NUGET_API_KEY}/api/v3/index.json ./src/CenterEdge.Async.sln"
                 sh "dotnet build -c Release /p:VERSION=${version} ./src/CenterEdge.Async.sln"
-                sh "dotnet test --no-build -c Release -l 'trx;LogFileName=results.trx' --collect:'XPlat Code Coverage' ./src/CenterEdge.Async.sln"
+                sh "dotnet test --no-build -f net5.0 -c Release -l 'trx;LogFileName=results.trx' --collect:'XPlat Code Coverage' ./src/CenterEdge.Async.sln"
                 sh "dotnet pack --no-build -c Release /p:VERSION=${version} ./src/CenterEdge.Async.sln"
 
                 stash name: 'packages', includes: "**/*.${version}.nupkg"

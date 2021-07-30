@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,18 @@ namespace CenterEdge.Async
     /// </remarks>
     public static class AsyncHelper
     {
+        // We allocate this delegate up-front rather than including it as an inline lambda for a small performance boost.
+        // If placed as a lambda it's lazy initialized, requiring a null check each time. Since we know we're almost always
+        // going to need it we can avoid that check. It's placed in AsyncHelper rather than ExclusiveSynchronizationContext
+        // because it doesn't require the generic type parameter. It expects the BlockingCollection to be passed as the state.
+        private static readonly SendOrPostCallback queueDoneMessage =
+            static state =>
+            {
+                Debug.Assert(state is BlockingCollection<(SendOrPostCallback Callback, object? State)>);
+
+                ((BlockingCollection<(SendOrPostCallback Callback, object? State)>)state!).CompleteAdding();
+            };
+
         /// <summary>
         /// Executes an async <see cref="Task"/> method with no return value synchronously.
         /// </summary>
@@ -167,7 +180,7 @@ namespace CenterEdge.Async
                 }
                 catch (InvalidOperationException)
                 {
-                    // This also indicates the items cannot be added because the main loop
+                    // This indicates the items cannot be added because the main loop
                     // is complete. We can't do a boolean check on IsAddingComplete because
                     // it will throw an ObjectDisposedException.
                 }
@@ -200,7 +213,13 @@ namespace CenterEdge.Async
 
             private void EndMessageLoop()
             {
-                Post(static state => ((ExclusiveSynchronizationContext<TAwaiter>) state!)._items.CompleteAdding(), this);
+                // This method is only called when _items can still accept messages
+                // So we can get a small perf gain by avoiding the virtual method call
+                // and exception handling in the Post method.
+
+                Debug.Assert(!_items.IsAddingCompleted);
+
+                _items.Add((queueDoneMessage, _items));
             }
 
             public void Run(TAwaiter awaiter)

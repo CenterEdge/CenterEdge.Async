@@ -53,7 +53,7 @@ jobs:
 
     - name: Test
       working-directory: ./src
-      run: dotnet test --no-build -c Release -l 'trx;LogFileName=${{ runner.temp }}/results.trx' ./CenterEdge.Async.sln
+      run: dotnet test --no-build -c Release -f net5.0 -l 'trx;LogFileName=${{ runner.temp }}/results.trx' ./CenterEdge.Async.sln
     
     - name: Test Report
       uses: dorny/test-reporter@v1

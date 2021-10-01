@@ -1,0 +1,74 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0.9.10
+      with:
+        versionSpec: "5.7.0"
+
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0.9.10
+      with:
+        useConfigFile: true
+        configFilePath: "GitVersion.yml"
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+
+    # Cache packages for faster subsequent runs
+    - uses: actions/cache@v2
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore
+      working-directory: ./src
+      run: >-
+        dotnet nuget add source --username USERNAME --password ${{ secrets.GH_PACKAGES_TOKEN }} --store-password-in-clear-text --name github https://nuget.pkg.github.com/CenterEdge/index.json
+        && dotnet restore ./CenterEdge.Async.sln
+
+    - name: Build
+      working-directory: ./src
+      run: dotnet build --no-restore -c Release /p:Version=${{ steps.gitversion.outputs.semVer }} ./CenterEdge.Async.sln
+
+    - name: Test
+      working-directory: ./src
+      run: dotnet test --no-build -c Release -l 'trx;LogFileName=${{ runner.temp }}/results.trx' ./CenterEdge.Async.sln
+    
+    - name: Test Report
+      uses: dorny/test-reporter@v1
+      if: success() || failure() # run this step even if previous step failed
+      with:
+        name: Unit Tests
+        path: ${{ runner.temp }}/results.trx
+        reporter: dotnet-trx
+
+    - name: Pack
+      working-directory: ./src
+      run: dotnet pack --no-build -c Release /p:PackageVersion=${{ steps.gitversion.outputs.nuGetVersionV2 }} ./CenterEdge.Async.sln
+
+    - name: Push
+      working-directory: ./src
+      # Publish CI packages from PRs and tagged releases
+      if: ${{ startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/pull/') }}
+      run: dotnet nuget push **/*.${{ steps.gitversion.outputs.nuGetVersionV2 }}.nupkg -k ${{ secrets.GITHUB_TOKEN  }} -s github

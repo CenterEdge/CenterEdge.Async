@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Since GitHub Packages doesn't support snupkg, include the PDB in the main nupkg file -->
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
+</Project>

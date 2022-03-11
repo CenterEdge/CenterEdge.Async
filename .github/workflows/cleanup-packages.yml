@@ -1,0 +1,20 @@
+name: Cleanup packages
+
+on:
+  schedule:
+  - cron: '21 0 * * 6'
+  workflow_dispatch:
+
+jobs:
+  clean-pr-packages:
+
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+    - uses: actions/delete-package-versions@v2
+      with:
+        package-name: CenterEdge.Async
+        min-versions-to-keep: 30
+        ignore-versions: ^(?!.*ci-pr).*$

@@ -53,14 +53,14 @@ jobs:
 
     - name: Test
       working-directory: ./src
-      run: dotnet test --no-build -c Release -f net5.0 -l 'trx;LogFileName=${{ runner.temp }}/results.trx' ./CenterEdge.Async.sln
+      run: dotnet test --no-build -c Release -f net5.0 -l 'trx;LogFileName=results.trx' ./CenterEdge.Async.sln
 
     - name: Test Report
       uses: dorny/test-reporter@v1
       if: success() || failure() # run this step even if previous step failed
       with:
         name: Unit Tests
-        path: ${{ runner.temp }}/results.trx
+        path: src/**/results.trx
         reporter: dotnet-trx
 
     - name: Pack

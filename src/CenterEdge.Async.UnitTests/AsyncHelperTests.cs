@@ -33,6 +33,41 @@ namespace CenterEdge.Async.UnitTests
         }
 
         [Fact]
+        public async Task RunSync_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        {
+            // Replicates the case where continuations are queued but the main task completes synchronously
+            // so the work must be removed from the queue
+
+            // Arrange
+
+            var i = 0;
+
+            async Task IncrementAsync()
+            {
+                await Task.Yield();
+                Interlocked.Increment(ref i);
+            }
+
+            // Act
+            AsyncHelper.RunSync(() =>
+            {
+#pragma warning disable CS4014
+                for (var j = 0; j < 3; j++)
+                {
+                    var _ = IncrementAsync();
+                }
+#pragma warning restore CS4014
+
+                return Task.CompletedTask;
+            });
+
+            // Assert
+
+            await Task.Delay(500);
+            Assert.Equal(3, i);
+        }
+
+        [Fact]
         public void RunSync_Task_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Arrange
@@ -157,7 +192,40 @@ namespace CenterEdge.Async.UnitTests
             Assert.Equal(3, i);
         }
 
+        [Fact]
+        public async Task RunSync_ValueTask_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        {
+            // Replicates the case where continuations are queued but the main task completes synchronously
+            // so the work must be removed from the queue
 
+            // Arrange
+
+            var i = 0;
+
+            async Task IncrementAsync()
+            {
+                await Task.Yield();
+                Interlocked.Increment(ref i);
+            }
+
+            // Act
+            AsyncHelper.RunSync(() =>
+            {
+#pragma warning disable CS4014
+                for (var j = 0; j < 3; j++)
+                {
+                    var _ = IncrementAsync();
+                }
+#pragma warning restore CS4014
+
+                return new ValueTask();
+            });
+
+            // Assert
+
+            await Task.Delay(500);
+            Assert.Equal(3, i);
+        }
 
         [Fact]
         public void RunSync_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
@@ -282,6 +350,41 @@ namespace CenterEdge.Async.UnitTests
         }
 
         [Fact]
+        public async Task RunSync_TaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        {
+            // Replicates the case where continuations are queued but the main task completes synchronously
+            // so the work must be removed from the queue
+
+            // Arrange
+
+            var i = 0;
+
+            async Task IncrementAsync()
+            {
+                await Task.Yield();
+                Interlocked.Increment(ref i);
+            }
+
+            // Act
+            AsyncHelper.RunSync(() =>
+            {
+#pragma warning disable CS4014
+                for (var j = 0; j < 3; j++)
+                {
+                    var _ = IncrementAsync();
+                }
+#pragma warning restore CS4014
+
+                return Task.FromResult(true);
+            });
+
+            // Assert
+
+            await Task.Delay(500);
+            Assert.Equal(3, i);
+        }
+
+        [Fact]
         public void RunSync_TaskT_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Act
@@ -400,6 +503,41 @@ namespace CenterEdge.Async.UnitTests
             // Assert
 
             Assert.Equal(3, result);
+        }
+
+        [Fact]
+        public async Task RunSync_ValueTaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        {
+            // Replicates the case where continuations are queued but the main task completes synchronously
+            // so the work must be removed from the queue
+
+            // Arrange
+
+            var i = 0;
+
+            async Task IncrementAsync()
+            {
+                await Task.Yield();
+                Interlocked.Increment(ref i);
+            }
+
+            // Act
+            AsyncHelper.RunSync(() =>
+            {
+#pragma warning disable CS4014
+                for (var j = 0; j < 3; j++)
+                {
+                    var _ = IncrementAsync();
+                }
+#pragma warning restore CS4014
+
+                return new ValueTask<bool>(true);
+            });
+
+            // Assert
+
+            await Task.Delay(500);
+            Assert.Equal(3, i);
         }
 
         [Fact]

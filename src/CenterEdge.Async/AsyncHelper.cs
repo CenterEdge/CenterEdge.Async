@@ -37,6 +37,10 @@ namespace CenterEdge.Async
                 {
                     synch.Run(awaiter);
                 }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
 
                 // Throw any exception returned by the task
                 awaiter.GetResult();
@@ -67,6 +71,10 @@ namespace CenterEdge.Async
                 if (!awaiter.IsCompleted)
                 {
                     synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
                 }
 
                 // Throw any exception returned by the task
@@ -100,6 +108,10 @@ namespace CenterEdge.Async
                 {
                     synch.Run(awaiter);
                 }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
 
                 // Throw any exception returned by the task or return the result
                 return awaiter.GetResult();
@@ -131,6 +143,10 @@ namespace CenterEdge.Async
                 if (!awaiter.IsCompleted)
                 {
                     synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
                 }
 
                 // Throw any exception returned by the task or return the result
@@ -178,25 +194,7 @@ namespace CenterEdge.Async
                 // This can occur if the main task starts additional work which isn't completed
                 // before the main task completes.
 
-                if (_parentSynchronizationContext != null)
-                {
-                    _parentSynchronizationContext.Post(d, state);
-                }
-                else
-                {
-                    // There is no parent sync context, so use the default behavior from the default
-                    // SynchronizationContext and post to the thread pool.
-
-                    #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-                    ThreadPool.QueueUserWorkItem(static s => s.d(s.state), (d, state), preferLocal: false);
-                    #else
-                    ThreadPool.QueueUserWorkItem(static s =>
-                    {
-                        var state = ((SendOrPostCallback d, object? state))s;
-                        state.d(state.state);
-                    }, (d, state));
-                    #endif
-                }
+                ExecuteOnParent(d, state);
             }
 
             private void EndMessageLoop()
@@ -225,6 +223,43 @@ namespace CenterEdge.Async
                     var task = _items.Take();
 
                     task.Callback(task.State);
+                }
+            }
+
+            // Processes any remaining continuations in the queue
+            public void RunAlreadyComplete()
+            {
+                EndMessageLoop();
+
+                while (!_items.IsCompleted)
+                {
+                    var task = _items.Take();
+
+                    ExecuteOnParent(task.Callback, task.State);
+                }
+            }
+
+            // Executes a work item on the parent SynchronizationContext or on the thread pool if there is not one
+            private void ExecuteOnParent(SendOrPostCallback callback, object? state)
+            {
+                if (_parentSynchronizationContext != null)
+                {
+                    _parentSynchronizationContext.Post(callback, state);
+                }
+                else
+                {
+                    // There is no parent sync context, so use the default behavior from the default
+                    // SynchronizationContext and post to the thread pool.
+
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+                    ThreadPool.QueueUserWorkItem(static s => s.callback(s.state), (callback, state), preferLocal: false);
+#else
+                    ThreadPool.QueueUserWorkItem(static s =>
+                    {
+                        var state = ((SendOrPostCallback callback, object? state))s;
+                        state.callback(state.state);
+                    }, (callback, state));
+#endif
                 }
             }
 

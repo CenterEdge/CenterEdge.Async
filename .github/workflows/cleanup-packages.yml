@@ -13,8 +13,9 @@ jobs:
       packages: write
 
     steps:
-    - uses: actions/delete-package-versions@v2
+    - uses: actions/delete-package-versions@v4
       with:
         package-name: CenterEdge.Async
+        package-type: nuget
         min-versions-to-keep: 30
         ignore-versions: ^(?!.*ci-pr).*$

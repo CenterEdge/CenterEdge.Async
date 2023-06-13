@@ -21,7 +21,7 @@ namespace CenterEdge.Async
         /// </summary>
         /// <param name="task"><see cref="Task"/> method to execute.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync(Func<Task> task)
@@ -57,7 +57,7 @@ namespace CenterEdge.Async
         /// <param name="task"><see cref="Task"/> method to execute.</param>
         /// <param name="state">State to pass to the method.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync<TState>(Func<TState, Task> task, TState state)
@@ -92,7 +92,7 @@ namespace CenterEdge.Async
         /// </summary>
         /// <param name="task"><see cref="ValueTask"/> method to execute.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync(Func<ValueTask> task)
@@ -128,7 +128,7 @@ namespace CenterEdge.Async
         /// <param name="task"><see cref="ValueTask"/> method to execute.</param>
         /// <param name="state">State to pass to the method.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync<TState>(Func<TState, ValueTask> task, TState state)
@@ -164,7 +164,7 @@ namespace CenterEdge.Async
         /// <param name="task"><see cref="Task{T}"/> method to execute.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T>(Func<Task<T>> task)
@@ -201,7 +201,7 @@ namespace CenterEdge.Async
         /// <param name="state">State to pass to the method.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T, TState>(Func<TState, Task<T>> task, TState state)
@@ -237,7 +237,7 @@ namespace CenterEdge.Async
         /// <param name="task"><see cref="ValueTask{T}"/> method to execute.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T>(Func<ValueTask<T>> task)
@@ -274,7 +274,7 @@ namespace CenterEdge.Async
         /// <param name="state">State to pass to the method.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T, TState>(Func<TState, ValueTask<T>> task, TState state)

@@ -19,9 +19,9 @@ namespace CenterEdge.Async
         /// <summary>
         /// Executes an async <see cref="Task"/> method with no return value synchronously.
         /// </summary>
-        /// <param name="task"><see cref="Task"/> method to execute</param>
+        /// <param name="task"><see cref="Task"/> method to execute.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync(Func<Task> task)
@@ -52,11 +52,47 @@ namespace CenterEdge.Async
         }
 
         /// <summary>
+        /// Executes an async <see cref="Task"/> method with no return value synchronously.
+        /// </summary>
+        /// <param name="task"><see cref="Task"/> method to execute.</param>
+        /// <param name="state">State to pass to the method.</param>
+        /// <remarks>
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
+        /// </remarks>
+        public static void RunSync<TState>(Func<TState, Task> task, TState state)
+        {
+            var oldContext = SynchronizationContext.Current;
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter>(oldContext);
+            SynchronizationContext.SetSynchronizationContext(synch);
+            try
+            {
+                var awaiter = task(state).GetAwaiter();
+
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
+
+                // Throw any exception returned by the task
+                awaiter.GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(oldContext);
+            }
+        }
+
+        /// <summary>
         /// Executes an async <see cref="ValueTask"/> method which has a void return value synchronously.
         /// </summary>
-        /// <param name="task"><see cref="ValueTask"/> method to execute</param>
+        /// <param name="task"><see cref="ValueTask"/> method to execute.</param>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static void RunSync(Func<ValueTask> task)
@@ -87,12 +123,48 @@ namespace CenterEdge.Async
         }
 
         /// <summary>
+        /// Executes an async <see cref="ValueTask"/> method which has a void return value synchronously.
+        /// </summary>
+        /// <param name="task"><see cref="ValueTask"/> method to execute.</param>
+        /// <param name="state">State to pass to the method.</param>
+        /// <remarks>
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
+        /// </remarks>
+        public static void RunSync<TState>(Func<TState, ValueTask> task, TState state)
+        {
+            var oldContext = SynchronizationContext.Current;
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter>(oldContext);
+            SynchronizationContext.SetSynchronizationContext(synch);
+            try
+            {
+                var awaiter = task(state).GetAwaiter();
+
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
+
+                // Throw any exception returned by the task
+                awaiter.GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(oldContext);
+            }
+        }
+
+        /// <summary>
         /// Executes an async <see cref="Task{T}"/> method which has a void return value synchronously.
         /// </summary>
-        /// <param name="task"><see cref="Task{T}"/> method to execute</param>
+        /// <param name="task"><see cref="Task{T}"/> method to execute.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T>(Func<Task<T>> task)
@@ -123,12 +195,49 @@ namespace CenterEdge.Async
         }
 
         /// <summary>
-        /// Executes an async <see cref="ValueTask{T}"/> method which has a void return value synchronously.
+        /// Executes an async <see cref="Task{T}"/> method which has a void return value synchronously.
         /// </summary>
-        /// <param name="task"><see cref="ValueTask{T}"/> method to execute</param>
+        /// <param name="task"><see cref="Task{T}"/> method to execute.</param>
+        /// <param name="state">State to pass to the method.</param>
         /// <returns>The asynchronous result.</returns>
         /// <remarks>
-        /// DO NOT use this methods unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
+        /// </remarks>
+        public static T RunSync<T, TState>(Func<TState, Task<T>> task, TState state)
+        {
+            var oldContext = SynchronizationContext.Current;
+            using var synch = new ExclusiveSynchronizationContext<TaskAwaiter<T>>(oldContext);
+            SynchronizationContext.SetSynchronizationContext(synch);
+            try
+            {
+                var awaiter = task(state).GetAwaiter();
+
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
+
+                // Throw any exception returned by the task or return the result
+                return awaiter.GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(oldContext);
+            }
+        }
+
+        /// <summary>
+        /// Executes an async <see cref="ValueTask{T}"/> method which has a void return value synchronously.
+        /// </summary>
+        /// <param name="task"><see cref="ValueTask{T}"/> method to execute.</param>
+        /// <returns>The asynchronous result.</returns>
+        /// <remarks>
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
         /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
         /// </remarks>
         public static T RunSync<T>(Func<ValueTask<T>> task)
@@ -139,6 +248,43 @@ namespace CenterEdge.Async
             try
             {
                 var awaiter = task().GetAwaiter();
+
+                if (!awaiter.IsCompleted)
+                {
+                    synch.Run(awaiter);
+                }
+                else
+                {
+                    synch.RunAlreadyComplete();
+                }
+
+                // Throw any exception returned by the task or return the result
+                return awaiter.GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(oldContext);
+            }
+        }
+
+        /// <summary>
+        /// Executes an async <see cref="ValueTask{T}"/> method which has a void return value synchronously.
+        /// </summary>
+        /// <param name="task"><see cref="ValueTask{T}"/> method to execute.</param>
+        /// <param name="state">State to pass to the method.</param>
+        /// <returns>The asynchronous result.</returns>
+        /// <remarks>
+        /// DO NOT use this method unless absolutely necessary. Calling async code from sync code is an anti-pattern
+        /// in most cases. This method is provided to assist in gradual conversion from sync to async code.
+        /// </remarks>
+        public static T RunSync<T, TState>(Func<TState, ValueTask<T>> task, TState state)
+        {
+            var oldContext = SynchronizationContext.Current;
+            using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter<T>>(oldContext);
+            SynchronizationContext.SetSynchronizationContext(synch);
+            try
+            {
+                var awaiter = task(state).GetAwaiter();
 
                 if (!awaiter.IsCompleted)
                 {

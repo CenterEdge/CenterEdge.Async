@@ -44,7 +44,7 @@ jobs:
     - name: Restore
       working-directory: ./src
       run: >-
-        dotnet nuget add source --username USERNAME --password ${{ secrets.GH_PACKAGES_TOKEN }} --store-password-in-clear-text --name github https://nuget.pkg.github.com/CenterEdge/index.json
+        dotnet nuget add source --name github https://nuget.pkg.github.com/CenterEdge/index.json
         && dotnet restore ./CenterEdge.Async.sln
 
     - name: Build

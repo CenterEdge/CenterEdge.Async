@@ -17,7 +17,7 @@
     <Authors>CenterEdge Software,Brant Burnett</Authors>
     <Description>Assists in the (risky) process of blocking a synchronous method waiting for an asynchronous Task to complete.</Description>
     <PackageTags>async threadpool deadlocks</PackageTags>
-    <PackageIcon>PackageIcon</PackageIcon>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>    
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>

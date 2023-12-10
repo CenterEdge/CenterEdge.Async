@@ -102,7 +102,9 @@ namespace CenterEdge.Async
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
+#pragma warning disable CA2012
                 var awaiter = task().GetAwaiter();
+#pragma warning restore CA2012
 
                 if (!awaiter.IsCompleted)
                 {
@@ -138,7 +140,9 @@ namespace CenterEdge.Async
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
+#pragma warning disable CA2012
                 var awaiter = task(state).GetAwaiter();
+#pragma warning restore CA2012
 
                 if (!awaiter.IsCompleted)
                 {
@@ -247,7 +251,9 @@ namespace CenterEdge.Async
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
+#pragma warning disable CA2012
                 var awaiter = task().GetAwaiter();
+#pragma warning restore CA2012
 
                 if (!awaiter.IsCompleted)
                 {
@@ -284,7 +290,9 @@ namespace CenterEdge.Async
             SynchronizationContext.SetSynchronizationContext(synch);
             try
             {
+#pragma warning disable CA2012
                 var awaiter = task(state).GetAwaiter();
+#pragma warning restore CA2012
 
                 if (!awaiter.IsCompleted)
                 {
@@ -305,16 +313,12 @@ namespace CenterEdge.Async
         }
 
         // Note: Sealing this class can help JIT make non-virtual method calls and inlined method calls for virtual methods
-        private sealed class ExclusiveSynchronizationContext<TAwaiter> : SynchronizationContext, IDisposable
+        private sealed class ExclusiveSynchronizationContext<TAwaiter>(
+            SynchronizationContext? parentSynchronizationContext)
+            : SynchronizationContext, IDisposable
             where TAwaiter : struct, ICriticalNotifyCompletion
         {
-            private readonly SynchronizationContext? _parentSynchronizationContext;
-            private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _items = new();
-
-            public ExclusiveSynchronizationContext(SynchronizationContext? parentSynchronizationContext)
-            {
-                _parentSynchronizationContext = parentSynchronizationContext;
-            }
+            private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _items = [];
 
             public override void Send(SendOrPostCallback d, object? state)
             {
@@ -366,9 +370,9 @@ namespace CenterEdge.Async
 
                 while (!_items.IsCompleted)
                 {
-                    var task = _items.Take();
+                    var (callback, state) = _items.Take();
 
-                    task.Callback(task.State);
+                    callback(state);
                 }
             }
 
@@ -379,18 +383,18 @@ namespace CenterEdge.Async
 
                 while (!_items.IsCompleted)
                 {
-                    var task = _items.Take();
+                    var (callback, state) = _items.Take();
 
-                    ExecuteOnParent(task.Callback, task.State);
+                    ExecuteOnParent(callback, state);
                 }
             }
 
             // Executes a work item on the parent SynchronizationContext or on the thread pool if there is not one
             private void ExecuteOnParent(SendOrPostCallback callback, object? state)
             {
-                if (_parentSynchronizationContext != null)
+                if (parentSynchronizationContext != null)
                 {
-                    _parentSynchronizationContext.Post(callback, state);
+                    parentSynchronizationContext.Post(callback, state);
                 }
                 else
                 {

@@ -19,7 +19,9 @@ jobs:
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: |
+          6.0.x
+          8.0.x
 
     - name: Install GitVersion
       uses: gittools/actions/gitversion/setup@v0.9.15
@@ -51,7 +53,7 @@ jobs:
 
     - name: Test
       working-directory: ./src
-      run: dotnet test --no-build -c Release -f net6.0 -l 'trx;LogFileName=results.trx' ./CenterEdge.Async.sln
+      run: dotnet test --no-build -c Release -f net8.0 -l 'trx;LogFileName=results.trx' ./CenterEdge.Async.sln
 
     - name: Test Report
       uses: dorny/test-reporter@v1

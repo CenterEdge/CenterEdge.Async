@@ -4,6 +4,10 @@ using System.Threading.Tasks;
 using Moq;
 using Xunit;
 
+// We use ConfigureAwait(false) in tests explicitly to test the correct behaviors. It isn't used in a way
+// that will interfere with test parallelization.
+#pragma warning disable xUnit1030
+
 namespace CenterEdge.Async.UnitTests
 {
     public class AsyncHelperTests

@@ -15,6 +15,11 @@ AsyncHelper.RunSync(() => SomeFunctionAsync(param1, param2));
 
 // Basic usage for an action running Task<T> or ValueTask<T>
 var result = AsyncHelper.RunSync(() => SomeFunctionAsync(param1, param2));
+
+// Pass in state as a parameter to reduce heap allocations due to closures
+AsyncHelper.RunSync(state => SomeFunctionAsync(state, true), param1);
+// or you can use a method group if parameters align precisely
+AsyncHelper.RunSync(SomeFunctionAsyncWithOneParameter, param1);
 ```
 
 ## Background
@@ -66,8 +71,8 @@ best approach.
 cd src/CenterEdge.Async.Benchmarks
 
 # x64
-dotnet run -c Release -f net5.0 -- job default --runtimes net48 netcoreapp31 netcoreapp50
+dotnet run -c Release -f net8.0 -- job default --runtimes net48 net6.0 net8.0
 
 # x86, .NET 4.8 only
-dotnet run -c Release -f net5.0 -- job default --runtimes net48 --platform x86
+dotnet run -c Release -f net8.0 -- job default --runtimes net48 --platform x86
 ```

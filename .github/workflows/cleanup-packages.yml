@@ -18,4 +18,4 @@ jobs:
         package-name: CenterEdge.Async
         package-type: nuget
         min-versions-to-keep: 30
-        ignore-versions: ^(?!.*ci-pr).*$
+        ignore-versions: ^(?!.*PullRequest).*$

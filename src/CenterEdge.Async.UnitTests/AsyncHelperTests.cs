@@ -1280,7 +1280,7 @@ namespace CenterEdge.Async.UnitTests
 
         private static readonly AsyncLocal<int> asyncLocalField = new();
 
-        private async static Task DelayedActionAsync(TimeSpan delay, Action action)
+        private static async Task DelayedActionAsync(TimeSpan delay, Action action)
         {
             await Task.Delay(delay);
 

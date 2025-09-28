@@ -1,7 +1,6 @@
 mode: ContinuousDelivery
 branches:
   pull-request:
-    mode: ContinuousDeployment
     label: ci-pr-
     track-merge-target: true
   tags:

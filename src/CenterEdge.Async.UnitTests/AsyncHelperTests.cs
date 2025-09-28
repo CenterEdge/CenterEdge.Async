@@ -22,14 +22,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<Task>)(async () =>
+            AsyncHelper.RunSync(async () =>
             {
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
-            }));
+            });
 
             // Assert
 
@@ -67,7 +67,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -79,14 +79,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<Task>)(async () =>
+            AsyncHelper.RunSync(async () =>
             {
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
-            }));
+            });
 
             // Assert
 
@@ -98,12 +98,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<Task>)(async () =>
+                AsyncHelper.RunSync(async () =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                })));
+                }));
         }
 
         [Fact]
@@ -111,7 +111,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<Task>)(() => throw new InvalidOperationException())));
+                AsyncHelper.RunSync(() => throw new InvalidOperationException()));
         }
 
         [Fact]
@@ -125,7 +125,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<Task>)(() => throw new InvalidOperationException()));
+                AsyncHelper.RunSync(() => throw new InvalidOperationException());
             }
             catch (InvalidOperationException)
             {
@@ -148,14 +148,14 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<Task>)(async () =>
+            AsyncHelper.RunSync(async () =>
             {
                 await Task.Yield();
 
 #pragma warning disable 4014
                 DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }));
+            });
 
             // Assert
 
@@ -182,14 +182,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<int, Task>)(async _ =>
+            AsyncHelper.RunSync(async _ =>
             {
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -227,7 +227,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -239,14 +239,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<int, Task>)(async _ =>
+            AsyncHelper.RunSync(async _ =>
             {
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -258,12 +258,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, Task>)(async _ =>
+                AsyncHelper.RunSync(async _ =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                }), 1));
+                }, 1));
         }
 
         [Fact]
@@ -271,7 +271,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, Task>)(_ => throw new InvalidOperationException()), 1));
+                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
         }
 
         [Fact]
@@ -285,7 +285,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<int, Task>)(_ => throw new InvalidOperationException()), 1);
+                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
             }
             catch (InvalidOperationException)
             {
@@ -308,14 +308,14 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<int, Task>)(async _ =>
+            AsyncHelper.RunSync(async _ =>
             {
                 await Task.Yield();
 
 #pragma warning disable 4014
                 DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -342,14 +342,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+            AsyncHelper.RunSync(async ValueTask () =>
             {
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
-            }));
+            });
 
             // Assert
 
@@ -387,7 +387,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -399,14 +399,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+            AsyncHelper.RunSync(async ValueTask () =>
             {
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
-            }));
+            });
 
             // Assert
 
@@ -418,12 +418,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+                AsyncHelper.RunSync(async ValueTask () =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                })));
+                }));
         }
 
         [Fact]
@@ -431,7 +431,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<ValueTask>)(() => throw new InvalidOperationException())));
+                AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException()));
         }
 
         [Fact]
@@ -445,7 +445,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<ValueTask>)(() => throw new InvalidOperationException()));
+                AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException());
             }
             catch (InvalidOperationException)
             {
@@ -468,14 +468,14 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<ValueTask>)(async () =>
+            AsyncHelper.RunSync(async ValueTask () =>
             {
                 await Task.Yield();
 
 #pragma warning disable 4014
                 DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }));
+            });
 
             // Assert
 
@@ -502,14 +502,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<int, ValueTask>)(async state =>
+            AsyncHelper.RunSync(async ValueTask (state) =>
             {
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
                 await Task.Delay(10);
                 i += 1;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -547,7 +547,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -559,14 +559,14 @@ namespace CenterEdge.Async.UnitTests
             var i = 0;
 
             // Act
-            AsyncHelper.RunSync((Func<int, ValueTask>)(async state =>
+            AsyncHelper.RunSync(async ValueTask (state) =>
             {
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -578,12 +578,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, ValueTask>)(async state =>
+                AsyncHelper.RunSync(async ValueTask (state) =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                }), 1));
+                }, 1));
         }
 
         [Fact]
@@ -591,7 +591,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, ValueTask>)(_ => throw new InvalidOperationException()), 1));
+                AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1));
         }
 
         [Fact]
@@ -605,7 +605,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<int, ValueTask>)(_ => throw new InvalidOperationException()), 1);
+                AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1);
             }
             catch (InvalidOperationException)
             {
@@ -628,14 +628,14 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<int, ValueTask>)(async state =>
+            AsyncHelper.RunSync(async ValueTask (state) =>
             {
                 await Task.Yield();
 
 #pragma warning disable 4014
                 DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -658,7 +658,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSync_TaskT_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+            var result = AsyncHelper.RunSync(async () =>
             {
                 var i = 1;
                 await Task.Delay(10);
@@ -666,7 +666,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10);
                 i += 1;
                 return i;
-            }));
+            });
 
             // Assert
 
@@ -704,7 +704,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -712,7 +712,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSync_TaskT_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+            var result = AsyncHelper.RunSync(async () =>
             {
                 var i = 1;
                 await Task.Delay(10).ConfigureAwait(false);
@@ -720,7 +720,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 return i;
-            }));
+            });
 
             // Assert
 
@@ -732,12 +732,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+                AsyncHelper.RunSync(async () =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                })));
+                }));
         }
 
         [Fact]
@@ -745,7 +745,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<Task<int>>)(() => throw new InvalidOperationException())));
+                AsyncHelper.RunSync(() => throw new InvalidOperationException()));
         }
 
         [Fact]
@@ -759,7 +759,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<Task<object>>)(() => throw new InvalidOperationException()));
+                AsyncHelper.RunSync(() => throw new InvalidOperationException());
             }
             catch (InvalidOperationException)
             {
@@ -782,7 +782,7 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<Task<int>>)(async () =>
+            AsyncHelper.RunSync(async () =>
             {
                 await Task.Yield();
 
@@ -791,7 +791,7 @@ namespace CenterEdge.Async.UnitTests
 #pragma warning restore 4014
 
                 return 0;
-            }));
+            });
 
             // Assert
 
@@ -814,7 +814,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSyncWithState_TaskT_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<int, Task<int>>)(async state =>
+            var result = AsyncHelper.RunSync(async state =>
             {
                 var i = 1;
                 await Task.Delay(10);
@@ -822,7 +822,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10);
                 i += 1;
                 return i;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -860,7 +860,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -868,7 +868,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSyncWithState_TaskT_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<int, Task<int>>)(async state =>
+            var result = AsyncHelper.RunSync(async state =>
             {
                 var i = 1;
                 await Task.Delay(10).ConfigureAwait(false);
@@ -876,7 +876,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 return i;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -888,12 +888,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, Task<int>>)(async state =>
+                AsyncHelper.RunSync(async state =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                }), 1));
+                }, 1));
         }
 
         [Fact]
@@ -901,7 +901,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, Task<int>>)(_ => throw new InvalidOperationException()), 1));
+                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
         }
 
         [Fact]
@@ -915,7 +915,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<int, Task<object>>)(_ => throw new InvalidOperationException()), 1);
+                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
             }
             catch (InvalidOperationException)
             {
@@ -938,7 +938,7 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<int, Task<int>>)(async state =>
+            AsyncHelper.RunSync(async state =>
             {
                 await Task.Yield();
 
@@ -947,7 +947,7 @@ namespace CenterEdge.Async.UnitTests
 #pragma warning restore 4014
 
                 return 0;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -970,7 +970,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSync_ValueTaskT_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+            var result = AsyncHelper.RunSync(async ValueTask<int> () =>
             {
                 var i = 1;
                 await Task.Delay(10);
@@ -978,7 +978,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10);
                 i += 1;
                 return i;
-            }));
+            });
 
             // Assert
 
@@ -1016,7 +1016,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -1024,7 +1024,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSync_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+            var result = AsyncHelper.RunSync(async ValueTask<int> () =>
             {
                 var i = 1;
                 await Task.Delay(10).ConfigureAwait(false);
@@ -1032,7 +1032,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 return i;
-            }));
+            });
 
             // Assert
 
@@ -1044,12 +1044,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+                AsyncHelper.RunSync(async ValueTask<int> () =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                })));
+                }));
         }
 
         [Fact]
@@ -1057,7 +1057,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<ValueTask<int>>)(() => throw new InvalidOperationException())));
+                AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException()));
         }
 
         [Fact]
@@ -1071,7 +1071,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<ValueTask<object>>)(() => throw new InvalidOperationException()));
+                AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException());
             }
             catch (InvalidOperationException)
             {
@@ -1094,7 +1094,7 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<ValueTask<int>>)(async () =>
+            AsyncHelper.RunSync(async ValueTask<int> () =>
             {
                 await Task.Yield();
 
@@ -1103,7 +1103,7 @@ namespace CenterEdge.Async.UnitTests
 #pragma warning restore 4014
 
                 return 0;
-            }));
+            });
 
             // Assert
 
@@ -1126,7 +1126,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSyncWithState_ValueTaskT_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<int, ValueTask<int>>)(async state =>
+            var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
             {
                 var i = 1;
                 await Task.Delay(10);
@@ -1134,7 +1134,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10);
                 i += 1;
                 return i;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -1172,7 +1172,7 @@ namespace CenterEdge.Async.UnitTests
 
             // Assert
 
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.Equal(3, i);
         }
 
@@ -1180,7 +1180,7 @@ namespace CenterEdge.Async.UnitTests
         public void RunSyncWithState_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
         {
             // Act
-            var result = AsyncHelper.RunSync((Func<int, ValueTask<int>>)(async state =>
+            var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
             {
                 var i = 1;
                 await Task.Delay(10).ConfigureAwait(false);
@@ -1188,7 +1188,7 @@ namespace CenterEdge.Async.UnitTests
                 await Task.Delay(10).ConfigureAwait(false);
                 i += 1;
                 return i;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -1200,12 +1200,12 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, ValueTask<int>>)(async state =>
+                AsyncHelper.RunSync(async ValueTask<int> (state) =>
                 {
                     await Task.Delay(10);
 
                     throw new InvalidOperationException();
-                }), 1));
+                }, 1));
         }
 
         [Fact]
@@ -1213,7 +1213,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync((Func<int, ValueTask<int>>)(_ => throw new InvalidOperationException()), 1));
+                AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1));
         }
 
         [Fact]
@@ -1227,7 +1227,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync((Func<int, ValueTask<object>>)(_ => throw new InvalidOperationException()), 1);
+                AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1);
             }
             catch (InvalidOperationException)
             {
@@ -1250,7 +1250,7 @@ namespace CenterEdge.Async.UnitTests
             var called = false;
 
             // Act
-            AsyncHelper.RunSync((Func<int, ValueTask<int>>)(async state =>
+            AsyncHelper.RunSync(async ValueTask<int> (state) =>
             {
                 await Task.Yield();
 
@@ -1259,7 +1259,7 @@ namespace CenterEdge.Async.UnitTests
 #pragma warning restore 4014
 
                 return 0;
-            }), 1);
+            }, 1);
 
             // Assert
 
@@ -1280,7 +1280,7 @@ namespace CenterEdge.Async.UnitTests
 
         private static readonly AsyncLocal<int> asyncLocalField = new();
 
-        private async Task DelayedActionAsync(TimeSpan delay, Action action)
+        private async static Task DelayedActionAsync(TimeSpan delay, Action action)
         {
             await Task.Delay(delay);
 

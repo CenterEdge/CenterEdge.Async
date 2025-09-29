@@ -49,7 +49,7 @@ public static class AsyncHelper
     public static void RunSync<TState>(Func<TState, Task> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
-        using var synch = new ExclusiveSynchronizationContext<TaskAwaiter>(oldContext);
+        using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
         {
@@ -100,7 +100,7 @@ public static class AsyncHelper
     public static void RunSync<TState>(Func<TState, ValueTask> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
-        using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter>(oldContext);
+        using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
         {
@@ -153,7 +153,7 @@ public static class AsyncHelper
     public static T RunSync<T, TState>(Func<TState, Task<T>> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
-        using var synch = new ExclusiveSynchronizationContext<TaskAwaiter<T>>(oldContext);
+        using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
         {
@@ -206,7 +206,7 @@ public static class AsyncHelper
     public static T RunSync<T, TState>(Func<TState, ValueTask<T>> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
-        using var synch = new ExclusiveSynchronizationContext<ValueTaskAwaiter<T>>(oldContext);
+        using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
         {

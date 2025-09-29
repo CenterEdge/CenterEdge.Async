@@ -7,10 +7,9 @@ using System.Threading;
 namespace CenterEdge.Async;
 
 // Note: Sealing this class can help JIT make non-virtual method calls and inlined method calls for virtual methods
-internal sealed class ExclusiveSynchronizationContext<TAwaiter>(
+internal sealed class ExclusiveSynchronizationContext(
     SynchronizationContext? parentSynchronizationContext)
     : SynchronizationContext, IDisposable
-    where TAwaiter : struct, ICriticalNotifyCompletion
 {
     private readonly BlockingCollection<WorkItem> _items = [];
 
@@ -56,7 +55,8 @@ internal sealed class ExclusiveSynchronizationContext<TAwaiter>(
         _items.CompleteAdding();
     }
 
-    public void Run(TAwaiter awaiter)
+    public void Run<TAwaiter>(TAwaiter awaiter)
+        where TAwaiter : struct, ICriticalNotifyCompletion
     {
         // Register a callback to run when the original awaiter is completed
         // We use UnsafeOnCompleted so it doesn't flow ExecutionContext

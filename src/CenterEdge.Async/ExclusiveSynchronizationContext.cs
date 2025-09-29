@@ -23,7 +23,7 @@ internal sealed class ExclusiveSynchronizationContext(
 #if NET6_0_OR_GREATER
         ArgumentNullException.ThrowIfNull(d);
 #else
-        if (state is null)
+        if (d is null)
         {
             ThrowHelper.ThrowArgumentNullException(nameof(d));
         }

@@ -20,6 +20,16 @@ internal sealed class ExclusiveSynchronizationContext(
 
     public override void Post(SendOrPostCallback d, object? state)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(d);
+#else
+        if (d is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(d));
+            return; // unreachable, but helps static analysis
+        }
+#endif
+
         try
         {
             _items.Add(new WorkItem(d, state));

@@ -58,6 +58,16 @@ public static class AsyncHelper
     /// </remarks>
     public static void RunSync<TState>(Func<TState, Task> task, TState state)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return; // unreachable, but helps static analysis
+        }
+#endif
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))
@@ -101,6 +111,16 @@ public static class AsyncHelper
     [OverloadResolutionPriority(-1)]
     public static void RunSync(Func<ValueTask> task)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return; // unreachable, but helps static analysis
+        }
+#endif
+
         RunSync(static state => state.Invoke(), task);
     }
 
@@ -116,6 +136,16 @@ public static class AsyncHelper
     [OverloadResolutionPriority(-1)]
     public static void RunSync<TState>(Func<TState, ValueTask> task, TState state)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return; // unreachable, but helps static analysis
+        }
+#endif
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))
@@ -161,6 +191,16 @@ public static class AsyncHelper
     /// </remarks>
     public static T RunSync<T>(Func<Task<T>> task)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return default!; // unreachable, but helps static analysis
+        }
+#endif
+
         return RunSync(static state => state.Invoke(), task);
     }
 
@@ -176,6 +216,16 @@ public static class AsyncHelper
     /// </remarks>
     public static T RunSync<T, TState>(Func<TState, Task<T>> task, TState state)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return default!; // unreachable, but helps static analysis
+        }
+#endif
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))
@@ -219,6 +269,16 @@ public static class AsyncHelper
     [OverloadResolutionPriority(-1)]
     public static T RunSync<T>(Func<ValueTask<T>> task)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return default!; // unreachable, but helps static analysis
+        }
+#endif
+
         return RunSync(static state => state.Invoke(), task);
     }
 
@@ -235,6 +295,16 @@ public static class AsyncHelper
     [OverloadResolutionPriority(-1)]
     public static T RunSync<T, TState>(Func<TState, ValueTask<T>> task, TState state)
     {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(task);
+#else
+        if (task is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(task));
+            return default!; // unreachable, but helps static analysis
+        }
+#endif
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))

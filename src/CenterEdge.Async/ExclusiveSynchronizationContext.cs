@@ -26,6 +26,7 @@ internal sealed class ExclusiveSynchronizationContext(
         if (d is null)
         {
             ThrowHelper.ThrowArgumentNullException(nameof(d));
+            return; // unreachable, but helps static analysis
         }
 #endif
 

@@ -25,7 +25,7 @@ public static class AsyncHelper
     //     });
 
     // If there is no SynchronizationContext or if the current SynchronizationContext is the default one, and if there
-    // is not a custom TaskScheduler, then it is safe to run the task directly without risk of deadlock. This reduces
+    // is no custom TaskScheduler, then it is safe to run the task directly without risk of deadlock. This reduces
     // overhead and improves the speed of continuations because we don't need to use the ExclusiveSynchronizationContext.
     // Also, this is particularly valuable in cases where the thread being blocked is a thread pool thread. Modern .NET
     // includes optimizations which reduce the risk of thread pool depletion and otherwise improves performance when

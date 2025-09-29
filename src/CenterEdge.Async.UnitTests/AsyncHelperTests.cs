@@ -732,7 +732,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async () =>
+                AsyncHelper.RunSync(async Task<int> () =>
                 {
                     await Task.Delay(10);
 
@@ -745,7 +745,7 @@ namespace CenterEdge.Async.UnitTests
         {
             // Act/Assert
             Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(() => throw new InvalidOperationException()));
+                AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException()));
         }
 
         [Fact]
@@ -759,7 +759,7 @@ namespace CenterEdge.Async.UnitTests
             // Act
             try
             {
-                AsyncHelper.RunSync(() => throw new InvalidOperationException());
+                AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException());
             }
             catch (InvalidOperationException)
             {

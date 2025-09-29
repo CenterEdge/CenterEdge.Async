@@ -24,6 +24,16 @@ public static class AsyncHelper
     //         await DoSomethingElse();
     //     });
 
+    // If there is no SynchronizationContext or if the current SynchronizationContext is the default one, and if there
+    // is not a custom TaskScheduler, then it is safe to run the task directly without risk of deadlock. This reduces
+    // overhead and improves the speed of continuations because we don't need to use the ExclusiveSynchronizationContext.
+    // Also, this is particularly valuable in cases where the thread being blocked is a thread pool thread. Modern .NET
+    // includes optimizations which reduce the risk of thread pool depletion and otherwise improves performance when
+    // waiting on a Task from a thread pool thread, something the ExclusiveSynchronizationContext cannot replicate.
+    private static bool IsDeadlockSafe(SynchronizationContext? currentSynchronizationContext) =>
+        (currentSynchronizationContext is null || currentSynchronizationContext.GetType() == typeof(SynchronizationContext))
+            && ReferenceEquals(TaskScheduler.Current, TaskScheduler.Default);
+
     /// <summary>
     /// Executes an async <see cref="Task"/> method with no return value synchronously.
     /// </summary>
@@ -49,6 +59,13 @@ public static class AsyncHelper
     public static void RunSync<TState>(Func<TState, Task> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
+
+        if (IsDeadlockSafe(oldContext))
+        {
+            task(state).GetAwaiter().GetResult();
+            return;
+        }
+
         using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
@@ -100,6 +117,13 @@ public static class AsyncHelper
     public static void RunSync<TState>(Func<TState, ValueTask> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
+
+        if (IsDeadlockSafe(oldContext))
+        {
+            task(state).AsTask().GetAwaiter().GetResult();
+            return;
+        }
+
         using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
@@ -153,6 +177,12 @@ public static class AsyncHelper
     public static T RunSync<T, TState>(Func<TState, Task<T>> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
+
+        if (IsDeadlockSafe(oldContext))
+        {
+            return task(state).GetAwaiter().GetResult();
+        }
+
         using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try
@@ -206,6 +236,12 @@ public static class AsyncHelper
     public static T RunSync<T, TState>(Func<TState, ValueTask<T>> task, TState state)
     {
         var oldContext = SynchronizationContext.Current;
+
+        if (IsDeadlockSafe(oldContext))
+        {
+            return task(state).AsTask().GetAwaiter().GetResult();
+        }
+
         using var synch = new ExclusiveSynchronizationContext(oldContext);
         SynchronizationContext.SetSynchronizationContext(synch);
         try

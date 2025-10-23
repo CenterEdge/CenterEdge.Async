@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Moq;
 using Xunit;
 
@@ -1276,6 +1277,156 @@ namespace CenterEdge.Async.UnitTests
 
         #endregion
 
+        #region SyncContext Restoration Tests
+
+        [Fact]
+        public void RunSync_Task_SyncCompletionWithContinuations_RestoresSyncContextBeforeProcessingQueue()
+        {
+            // This test simulates the bug where a reentrant sync context (like WinForms)
+            // might process posted messages before RunSync returns, causing continuations
+            // to see the ExclusiveSynchronizationContext instead of the original context.
+
+            // Arrange
+            SynchronizationContext? capturedContext = null;
+            var reentrantSync = new ReentrantSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(reentrantSync);
+
+            try
+            {
+                // Act
+                AsyncHelper.RunSync(() =>
+                {
+                    // Start a continuation that will be queued
+#pragma warning disable CS4014
+                    Task.Run(() =>
+                    {
+                        // This continuation will be posted back to the sync context
+                        capturedContext = SynchronizationContext.Current;
+                    });
+#pragma warning restore CS4014
+
+                    // Return a completed task so RunAlreadyComplete is called
+                    return Task.CompletedTask;
+                });
+
+                // The reentrant context processes its queue before returning
+                reentrantSync.ProcessQueue();
+
+                // Assert
+                Assert.Equal(reentrantSync, capturedContext);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+            }
+        }
+
+        [Fact]
+        public void RunSync_ValueTask_SyncCompletionWithContinuations_RestoresSyncContextBeforeProcessingQueue()
+        {
+            // Arrange
+            SynchronizationContext? capturedContext = null;
+            var reentrantSync = new ReentrantSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(reentrantSync);
+
+            try
+            {
+                // Act
+                AsyncHelper.RunSync(() =>
+                {
+#pragma warning disable CS4014
+                    Task.Run(() =>
+                    {
+                        capturedContext = SynchronizationContext.Current;
+                    });
+#pragma warning restore CS4014
+
+                    return new ValueTask();
+                });
+
+                reentrantSync.ProcessQueue();
+
+                // Assert
+                Assert.Equal(reentrantSync, capturedContext);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+            }
+        }
+
+        [Fact]
+        public void RunSync_TaskT_SyncCompletionWithContinuations_RestoresSyncContextBeforeProcessingQueue()
+        {
+            // Arrange
+            SynchronizationContext? capturedContext = null;
+            var reentrantSync = new ReentrantSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(reentrantSync);
+
+            try
+            {
+                // Act
+                var result = AsyncHelper.RunSync(() =>
+                {
+#pragma warning disable CS4014
+                    Task.Run(() =>
+                    {
+                        capturedContext = SynchronizationContext.Current;
+                    });
+#pragma warning restore CS4014
+
+                    return Task.FromResult(42);
+                });
+
+                reentrantSync.ProcessQueue();
+
+                // Assert
+                Assert.Equal(42, result);
+                Assert.Equal(reentrantSync, capturedContext);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+            }
+        }
+
+        [Fact]
+        public void RunSync_ValueTaskT_SyncCompletionWithContinuations_RestoresSyncContextBeforeProcessingQueue()
+        {
+            // Arrange
+            SynchronizationContext? capturedContext = null;
+            var reentrantSync = new ReentrantSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(reentrantSync);
+
+            try
+            {
+                // Act
+                var result = AsyncHelper.RunSync(() =>
+                {
+#pragma warning disable CS4014
+                    Task.Run(() =>
+                    {
+                        capturedContext = SynchronizationContext.Current;
+                    });
+#pragma warning restore CS4014
+
+                    return new ValueTask<int>(42);
+                });
+
+                reentrantSync.ProcessQueue();
+
+                // Assert
+                Assert.Equal(42, result);
+                Assert.Equal(reentrantSync, capturedContext);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+            }
+        }
+
+        #endregion
+
         #region Helpers
 
         private static readonly AsyncLocal<int> asyncLocalField = new();
@@ -1285,6 +1436,27 @@ namespace CenterEdge.Async.UnitTests
             await Task.Delay(delay);
 
             action.Invoke();
+        }
+
+        // Simulates a reentrant synchronization context like WinForms
+        // that processes its message queue synchronously when asked
+        private class ReentrantSynchronizationContext : SynchronizationContext
+        {
+            private readonly Queue<(SendOrPostCallback, object?)> _queue = new();
+
+            public override void Post(SendOrPostCallback d, object? state)
+            {
+                _queue.Enqueue((d, state));
+            }
+
+            public void ProcessQueue()
+            {
+                while (_queue.Count > 0)
+                {
+                    var (callback, state) = _queue.Dequeue();
+                    callback(state);
+                }
+            }
         }
 
         #endregion

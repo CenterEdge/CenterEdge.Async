@@ -88,6 +88,10 @@ public static class AsyncHelper
             }
             else
             {
+                // Restore the sync context before processing any queued continuations
+                // to avoid reentrancy issues where the parent context might process
+                // posted messages before we return
+                SynchronizationContext.SetSynchronizationContext(oldContext);
                 synch.RunAlreadyComplete();
             }
 
@@ -168,6 +172,10 @@ public static class AsyncHelper
             }
             else
             {
+                // Restore the sync context before processing any queued continuations
+                // to avoid reentrancy issues where the parent context might process
+                // posted messages before we return
+                SynchronizationContext.SetSynchronizationContext(oldContext);
                 synch.RunAlreadyComplete();
             }
 
@@ -245,6 +253,10 @@ public static class AsyncHelper
             }
             else
             {
+                // Restore the sync context before processing any queued continuations
+                // to avoid reentrancy issues where the parent context might process
+                // posted messages before we return
+                SynchronizationContext.SetSynchronizationContext(oldContext);
                 synch.RunAlreadyComplete();
             }
 
@@ -326,6 +338,10 @@ public static class AsyncHelper
             }
             else
             {
+                // Restore the sync context before processing any queued continuations
+                // to avoid reentrancy issues where the parent context might process
+                // posted messages before we return
+                SynchronizationContext.SetSynchronizationContext(oldContext);
                 synch.RunAlreadyComplete();
             }
 

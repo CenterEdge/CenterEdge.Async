@@ -408,7 +408,7 @@ public static class AsyncHelper
         }
     }
 
-    // Provides a lightweight mechanism for using statements to cleanup the thread-static t_InRunSync flag.
+    // Provides a lightweight mechanism for using statements to clean up the thread-static t_InRunSync flag.
 
     private static InRunSyncCleanup EnterRunSync()
     {

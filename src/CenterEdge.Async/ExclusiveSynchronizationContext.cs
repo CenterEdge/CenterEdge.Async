@@ -13,6 +13,8 @@ internal sealed class ExclusiveSynchronizationContext(
 {
     private readonly BlockingCollection<WorkItem> _items = [];
 
+    public SynchronizationContext? ParentSynchronizationContext => parentSynchronizationContext;
+
     public override void Send(SendOrPostCallback d, object? state)
     {
         throw new NotSupportedException("We cannot send to our same thread");
@@ -96,9 +98,9 @@ internal sealed class ExclusiveSynchronizationContext(
     // Executes a work item on the parent SynchronizationContext or on the thread pool if there is not one
     private void ExecuteOnParent(SendOrPostCallback callback, object? state)
     {
-        if (parentSynchronizationContext != null)
+        if (ParentSynchronizationContext != null)
         {
-            parentSynchronizationContext.Post(callback, state);
+            ParentSynchronizationContext.Post(callback, state);
         }
         else
         {

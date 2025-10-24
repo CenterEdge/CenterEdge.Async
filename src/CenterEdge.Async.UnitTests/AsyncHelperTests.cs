@@ -8,1285 +8,1497 @@ using Xunit;
 // that will interfere with test parallelization.
 #pragma warning disable xUnit1030
 
-namespace CenterEdge.Async.UnitTests
+namespace CenterEdge.Async.UnitTests;
+
+public class AsyncHelperTests
 {
-    public class AsyncHelperTests
+    #region IsRunningSynchronously
+
+    [Fact]
+    public void IsRunningSynchronously_NoContext_False()
     {
-        #region RunSync_Task
+        // Act
 
-        [Fact]
-        public void RunSync_Task_DoesAllTasks()
+        var result = AsyncHelper.IsRunningSynchronously;
+
+        // Assert
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsRunningSynchronously_NoContextRunSync_TrueBeforeAwait()
+    {
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.True(AsyncHelper.IsRunningSynchronously);
+            await Task.Delay(10);
+            Assert.False(AsyncHelper.IsRunningSynchronously);
+        });
+    }
+
+    [Fact]
+    public void IsRunningSynchronously_FakeContext_False()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        var result = AsyncHelper.IsRunningSynchronously;
+
+        // Assert
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsRunningSynchronously_InSyncContext_True()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.True(AsyncHelper.IsRunningSynchronously);
+            await Task.Delay(10);
+            Assert.True(AsyncHelper.IsRunningSynchronously);
+        });
+    }
+
+    [Fact]
+    public void IsRunningSynchronously_OnThreadPool_False()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.True(AsyncHelper.IsRunningSynchronously);
+            await Task.Delay(10).ConfigureAwait(false);
+            Assert.False(AsyncHelper.IsRunningSynchronously);
+        });
+    }
+
+    #endregion
+
+    #region GetReplacedSynchronizationContext
+
+    [Fact]
+    public void GetReplacedSynchronizationContext_NoContext_Null()
+    {
+        // Act
+
+        var result = AsyncHelper.GetReplacedSynchronizationContext();
+
+        // Assert
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetReplacedSynchronizationContext_DefaultContextRunSync_Null()
+    {
+        var previousSyncContext = SynchronizationContext.Current;
+        try
         {
             // Arrange
 
-            var i = 0;
+            var newContext = new SynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(newContext);
 
             // Act
+
             AsyncHelper.RunSync(async () =>
             {
-                i += 1;
+                Assert.Null(AsyncHelper.GetReplacedSynchronizationContext());
                 await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
+                Assert.Null(AsyncHelper.GetReplacedSynchronizationContext());
             });
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousSyncContext);
+        }
+    }
 
-            // Assert
+    [Fact]
+    public void GetReplacedSynchronizationContext_FakeContext_Null()
+    {
+        // Arrange
 
-            Assert.Equal(3, i);
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        var result = AsyncHelper.GetReplacedSynchronizationContext();
+
+        // Assert
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetReplacedSynchronizationContext_InSyncContext_GetsParent()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.IsType<FakeSynchronizationContext>(AsyncHelper.GetReplacedSynchronizationContext());
+            await Task.Delay(10);
+            Assert.IsType<FakeSynchronizationContext>(AsyncHelper.GetReplacedSynchronizationContext());
+        });
+    }
+
+    [Fact]
+    public void GetReplacedSynchronizationContext_OnThreadPool_Null()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.IsType<FakeSynchronizationContext>(AsyncHelper.GetReplacedSynchronizationContext());
+            await Task.Delay(10).ConfigureAwait(false);
+            Assert.Null(AsyncHelper.GetReplacedSynchronizationContext());
+        });
+    }
+
+    [Fact]
+    public void GetReplacedSynchronizationContext_DoubleNested_Recurses()
+    {
+        // Arrange
+
+        using var _ = FakeSynchronizationContext.Install();
+
+        // Act
+
+        AsyncHelper.RunSync(async () =>
+        {
+            Assert.IsType<FakeSynchronizationContext>(AsyncHelper.GetReplacedSynchronizationContext());
+            await Task.Delay(10);
+
+            AsyncHelper.RunSync(async () =>
+            {
+                Assert.IsType<FakeSynchronizationContext>(AsyncHelper.GetReplacedSynchronizationContext());
+            });
+        });
+    }
+
+    #endregion
+
+    #region RunSync_Task
+
+    [Fact]
+    public void RunSync_Task_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async () =>
+        {
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+        });
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public async Task RunSync_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        [Fact]
-        public async Task RunSync_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(() =>
         {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(() =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return Task.CompletedTask;
-            });
+            return Task.CompletedTask;
+        });
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSync_Task_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSync_Task_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async () =>
         {
-            // Arrange
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+        });
 
-            var i = 0;
+        // Assert
 
-            // Act
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSync_Task_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async () =>
             {
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-            });
+                await Task.Delay(10);
 
-            // Assert
+                throw new InvalidOperationException();
+            }));
+    }
 
-            Assert.Equal(3, i);
+    [Fact]
+    public void RunSync_Task_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(() => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void RunSync_Task_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(() => throw new InvalidOperationException());
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
         }
 
-        [Fact]
-        public void RunSync_Task_ExceptionAfterAwait_ThrowsException()
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSync_Task_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async () =>
         {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async () =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }));
-        }
-
-        [Fact]
-        public void RunSync_Task_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(() => throw new InvalidOperationException()));
-        }
-
-        [Fact]
-        public void RunSync_Task_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(() => throw new InvalidOperationException());
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSync_Task_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
-            AsyncHelper.RunSync(async () =>
-            {
-                await Task.Yield();
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            });
+        });
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSyncWithState_Task
+
+    [Fact]
+    public void RunSyncWithState_Task_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async _ =>
+        {
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+        }, 1);
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public async Task RunSyncWithState_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSyncWithState_Task
-
-        [Fact]
-        public void RunSyncWithState_Task_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(state =>
         {
-            // Arrange
+#pragma warning disable CS4014
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
+#pragma warning restore CS4014
 
-            var i = 0;
+            return Task.CompletedTask;
+        }, 1);
 
-            // Act
+        // Assert
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSyncWithState_Task_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async _ =>
+        {
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+        }, 1);
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSyncWithState_Task_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async _ =>
             {
-                i += 1;
                 await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-            }, 1);
 
-            // Assert
+                throw new InvalidOperationException();
+            }, 1));
+    }
 
-            Assert.Equal(3, i);
+    [Fact]
+    public void RunSyncWithState_Task_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_Task_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
         }
 
-        [Fact]
-        public async Task RunSyncWithState_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSyncWithState_Task_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async _ =>
         {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(state =>
-            {
-#pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
-#pragma warning restore CS4014
-
-                return Task.CompletedTask;
-            }, 1);
-
-            // Assert
-
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
-
-        [Fact]
-        public void RunSyncWithState_Task_ConfigureAwaitFalse_DoesAllTasks()
-        {
-            // Arrange
-
-            var i = 0;
-
-            // Act
-            AsyncHelper.RunSync(async _ =>
-            {
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-            }, 1);
-
-            // Assert
-
-            Assert.Equal(3, i);
-        }
-
-        [Fact]
-        public void RunSyncWithState_Task_ExceptionAfterAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async _ =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }, 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_Task_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_Task_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSyncWithState_Task_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
-            AsyncHelper.RunSync(async _ =>
-            {
-                await Task.Yield();
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }, 1);
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSync_ValueTask
+
+    [Fact]
+    public void RunSync_ValueTask_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask () =>
+        {
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+        });
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public async Task RunSync_ValueTask_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSync_ValueTask
-
-        [Fact]
-        public void RunSync_ValueTask_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(() =>
         {
-            // Arrange
+#pragma warning disable CS4014
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
+#pragma warning restore CS4014
 
-            var i = 0;
+            return new ValueTask();
+        });
 
-            // Act
+        // Assert
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSync_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask () =>
+        {
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+        });
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSync_ValueTask_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async ValueTask () =>
             {
-                i += 1;
                 await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-            });
 
-            // Assert
+                throw new InvalidOperationException();
+            }));
+    }
 
-            Assert.Equal(3, i);
+    [Fact]
+    public void RunSync_ValueTask_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void RunSync_ValueTask_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException());
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
         }
 
-        [Fact]
-        public async Task RunSync_ValueTask_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSync_ValueTask_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask () =>
         {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(() =>
-            {
-#pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
-#pragma warning restore CS4014
-
-                return new ValueTask();
-            });
-
-            // Assert
-
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
-
-        [Fact]
-        public void RunSync_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
-        {
-            // Arrange
-
-            var i = 0;
-
-            // Act
-            AsyncHelper.RunSync(async ValueTask () =>
-            {
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-            });
-
-            // Assert
-
-            Assert.Equal(3, i);
-        }
-
-        [Fact]
-        public void RunSync_ValueTask_ExceptionAfterAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async ValueTask () =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }));
-        }
-
-        [Fact]
-        public void RunSync_ValueTask_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException()));
-        }
-
-        [Fact]
-        public void RunSync_ValueTask_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(ValueTask () => throw new InvalidOperationException());
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSync_ValueTask_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
-            AsyncHelper.RunSync(async ValueTask () =>
-            {
-                await Task.Yield();
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            });
+        });
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSyncWithState_ValueTask
+
+    [Fact]
+    public void RunSyncWithState_ValueTask_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask (state) =>
+        {
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+        }, 1);
+
+        // Assert
+
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public async Task RunSyncWithState_ValueTask_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSyncWithState_ValueTask
-
-        [Fact]
-        public void RunSyncWithState_ValueTask_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(state =>
         {
-            // Arrange
-
-            var i = 0;
-
-            // Act
-            AsyncHelper.RunSync(async ValueTask (state) =>
-            {
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-            }, 1);
-
-            // Assert
-
-            Assert.Equal(3, i);
-        }
-
-        [Fact]
-        public async Task RunSyncWithState_ValueTask_StartsTasksAndCompletesSynchronously_DoesAllTasks()
-        {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(state =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return new ValueTask();
-            }, 1);
+            return new ValueTask();
+        }, 1);
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSyncWithState_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSyncWithState_ValueTask_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Arrange
+
+        var i = 0;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask (state) =>
         {
-            // Arrange
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+        }, 1);
 
-            var i = 0;
+        // Assert
 
-            // Act
+        Assert.Equal(3, i);
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTask_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async ValueTask (state) =>
             {
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-            }, 1);
+                await Task.Delay(10);
 
-            // Assert
+                throw new InvalidOperationException();
+            }, 1));
+    }
 
-            Assert.Equal(3, i);
+    [Fact]
+    public void RunSyncWithState_ValueTask_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTask_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1);
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
         }
 
-        [Fact]
-        public void RunSyncWithState_ValueTask_ExceptionAfterAwait_ThrowsException()
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTask_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask (state) =>
         {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async ValueTask (state) =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }, 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTask_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTask_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(ValueTask (_) => throw new InvalidOperationException(), 1);
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTask_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
-            AsyncHelper.RunSync(async ValueTask (state) =>
-            {
-                await Task.Yield();
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
-            }, 1);
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSync_TaskT
+
+    [Fact]
+    public void RunSync_TaskT_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async () =>
+        {
+            var i = 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            return i;
+        });
+
+        // Assert
+
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public async Task RunSync_TaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSync_TaskT
-
-        [Fact]
-        public void RunSync_TaskT_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(() =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async () =>
-            {
-                var i = 1;
-                await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-                return i;
-            });
-
-            // Assert
-
-            Assert.Equal(3, result);
-        }
-
-        [Fact]
-        public async Task RunSync_TaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
-        {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(() =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return Task.FromResult(true);
-            });
+            return Task.FromResult(true);
+        });
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSync_TaskT_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSync_TaskT_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async () =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async () =>
+            var i = 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            return i;
+        });
+
+        // Assert
+
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public void RunSync_TaskT_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(async Task<int> () =>
             {
-                var i = 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                return i;
-            });
+                await Task.Delay(10);
 
-            // Assert
+                throw new InvalidOperationException();
+            }));
+    }
 
-            Assert.Equal(3, result);
+    [Fact]
+    public void RunSync_TaskT_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void RunSync_TaskT_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException());
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
         }
 
-        [Fact]
-        public void RunSync_TaskT_ExceptionAfterAwait_ThrowsException()
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSync_TaskT_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async () =>
         {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async Task<int> () =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }));
-        }
-
-        [Fact]
-        public void RunSync_TaskT_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException()));
-        }
-
-        [Fact]
-        public void RunSync_TaskT_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(Task<int> () => throw new InvalidOperationException());
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSync_TaskT_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
-            AsyncHelper.RunSync(async () =>
-            {
-                await Task.Yield();
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
 
-                return 0;
-            });
+            return 0;
+        });
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSyncWithState_TaskT
+
+    [Fact]
+    public void RunSyncWithState_TaskT_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async state =>
+        {
+            var i = 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            return i;
+        }, 1);
+
+        // Assert
+
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public async Task RunSyncWithState_TaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSyncWithState_TaskT
-
-        [Fact]
-        public void RunSyncWithState_TaskT_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(state =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async state =>
-            {
-                var i = 1;
-                await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-                return i;
-            }, 1);
-
-            // Assert
-
-            Assert.Equal(3, result);
-        }
-
-        [Fact]
-        public async Task RunSyncWithState_TaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
-        {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(state =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return Task.FromResult(true);
-            }, 1);
+            return Task.FromResult(true);
+        }, 1);
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSyncWithState_TaskT_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSyncWithState_TaskT_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async state =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async state =>
-            {
-                var i = 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                return i;
-            }, 1);
+            var i = 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            return i;
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.Equal(3, result);
-        }
+        Assert.Equal(3, result);
+    }
 
-        [Fact]
-        public void RunSyncWithState_TaskT_ExceptionAfterAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async state =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }, 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_TaskT_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_TaskT_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSyncWithState_TaskT_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
+    [Fact]
+    public void RunSyncWithState_TaskT_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async state =>
             {
-                await Task.Yield();
+                await Task.Delay(10);
+
+                throw new InvalidOperationException();
+            }, 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_TaskT_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_TaskT_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(_ => throw new InvalidOperationException(), 1);
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
+        }
+
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSyncWithState_TaskT_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async state =>
+        {
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
 
-                return 0;
-            }, 1);
+            return 0;
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSync_ValueTaskT
+
+    [Fact]
+    public void RunSync_ValueTaskT_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async ValueTask<int> () =>
+        {
+            var i = 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            return i;
+        });
+
+        // Assert
+
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public async Task RunSync_ValueTaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSync_ValueTaskT
-
-        [Fact]
-        public void RunSync_ValueTaskT_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(() =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async ValueTask<int> () =>
-            {
-                var i = 1;
-                await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-                return i;
-            });
-
-            // Assert
-
-            Assert.Equal(3, result);
-        }
-
-        [Fact]
-        public async Task RunSync_ValueTaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
-        {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(() =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return new ValueTask<bool>(true);
-            });
+            return new ValueTask<bool>(true);
+        });
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSync_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSync_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async ValueTask<int> () =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async ValueTask<int> () =>
-            {
-                var i = 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                return i;
-            });
+            var i = 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            return i;
+        });
 
-            // Assert
+        // Assert
 
-            Assert.Equal(3, result);
-        }
+        Assert.Equal(3, result);
+    }
 
-        [Fact]
-        public void RunSync_ValueTaskT_ExceptionAfterAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async ValueTask<int> () =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }));
-        }
-
-        [Fact]
-        public void RunSync_ValueTaskT_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException()));
-        }
-
-        [Fact]
-        public void RunSync_ValueTaskT_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException());
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSync_ValueTaskT_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
+    [Fact]
+    public void RunSync_ValueTaskT_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async ValueTask<int> () =>
             {
-                await Task.Yield();
+                await Task.Delay(10);
+
+                throw new InvalidOperationException();
+            }));
+    }
+
+    [Fact]
+    public void RunSync_ValueTaskT_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void RunSync_ValueTaskT_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(ValueTask<int> () => throw new InvalidOperationException());
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
+        }
+
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSync_ValueTaskT_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask<int> () =>
+        {
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
 
-                return 0;
-            });
+            return 0;
+        });
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region RunSyncWithState_ValueTaskT
+
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
+        {
+            var i = 1;
+            await Task.Delay(10);
+            i += 1;
+            await Task.Delay(10);
+            i += 1;
+            return i;
+        }, 1);
+
+        // Assert
+
+        Assert.Equal(3, result);
+    }
+
+    [Fact]
+    public async Task RunSyncWithState_ValueTaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
+    {
+        // Replicates the case where continuations are queued but the main task completes synchronously
+        // so the work must be removed from the queue
+
+        // Arrange
+
+        var i = 0;
+
+        async Task IncrementAsync()
+        {
+            await Task.Yield();
+            Interlocked.Increment(ref i);
         }
 
-        #endregion
-
-        #region RunSyncWithState_ValueTaskT
-
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_DoesAllTasks()
+        // Act
+        AsyncHelper.RunSync(state =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
-            {
-                var i = 1;
-                await Task.Delay(10);
-                i += 1;
-                await Task.Delay(10);
-                i += 1;
-                return i;
-            }, 1);
-
-            // Assert
-
-            Assert.Equal(3, result);
-        }
-
-        [Fact]
-        public async Task RunSyncWithState_ValueTaskT_StartsTasksAndCompletesSynchronously_DoesAllTasks()
-        {
-            // Replicates the case where continuations are queued but the main task completes synchronously
-            // so the work must be removed from the queue
-
-            // Arrange
-
-            var i = 0;
-
-            async Task IncrementAsync()
-            {
-                await Task.Yield();
-                Interlocked.Increment(ref i);
-            }
-
-            // Act
-            AsyncHelper.RunSync(state =>
-            {
 #pragma warning disable CS4014
-                for (var j = 0; j < 3; j++)
-                {
-                    var _ = IncrementAsync();
-                }
+            for (var j = 0; j < 3; j++)
+            {
+                var _ = IncrementAsync();
+            }
 #pragma warning restore CS4014
 
-                return new ValueTask<bool>(true);
-            }, 1);
+            return new ValueTask<bool>(true);
+        }, 1);
 
-            // Assert
+        // Assert
 
-            await Task.Delay(500, TestContext.Current.CancellationToken);
-            Assert.Equal(3, i);
-        }
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(3, i);
+    }
 
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_ConfigureAwaitFalse_DoesAllTasks()
+    {
+        // Act
+        var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
         {
-            // Act
-            var result = AsyncHelper.RunSync(async ValueTask<int> (state) =>
-            {
-                var i = 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                await Task.Delay(10).ConfigureAwait(false);
-                i += 1;
-                return i;
-            }, 1);
+            var i = 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            await Task.Delay(10).ConfigureAwait(false);
+            i += 1;
+            return i;
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.Equal(3, result);
-        }
+        Assert.Equal(3, result);
+    }
 
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_ExceptionAfterAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(async ValueTask<int> (state) =>
-                {
-                    await Task.Delay(10);
-
-                    throw new InvalidOperationException();
-                }, 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_ExceptionBeforeAwait_ThrowsException()
-        {
-            // Act/Assert
-            Assert.Throws<InvalidOperationException>(() =>
-                AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1));
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_ThrowsException_ResetsSyncContext()
-        {
-            // Arrange
-
-            var sync = new SynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(sync);
-
-            // Act
-            try
-            {
-                AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1);
-            }
-            catch (InvalidOperationException)
-            {
-                // Expected
-            }
-
-            // Assert
-
-            Assert.Equal(sync, SynchronizationContext.Current);
-        }
-
-        [Fact]
-        public void RunSyncWithState_ValueTaskT_DanglingContinuations_HandledOnParentSyncContext()
-        {
-            // Arrange
-
-            var mockSync = new Mock<SynchronizationContext> { CallBase = true };
-            SynchronizationContext.SetSynchronizationContext(mockSync.Object);
-
-            var called = false;
-
-            // Act
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_ExceptionAfterAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
             AsyncHelper.RunSync(async ValueTask<int> (state) =>
             {
-                await Task.Yield();
+                await Task.Delay(10);
+
+                throw new InvalidOperationException();
+            }, 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_ExceptionBeforeAwait_ThrowsException()
+    {
+        // Act/Assert
+        Assert.Throws<InvalidOperationException>(() =>
+            AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1));
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_ThrowsException_ResetsSyncContext()
+    {
+        // Arrange
+
+        var sync = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(sync);
+
+        // Act
+        try
+        {
+            AsyncHelper.RunSync(ValueTask<int> (_) => throw new InvalidOperationException(), 1);
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected
+        }
+
+        // Assert
+
+        Assert.Equal(sync, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void RunSyncWithState_ValueTaskT_DanglingContinuations_HandledOnParentSyncContext()
+    {
+        // Arrange
+
+        var mockSync = new Mock<SynchronizationContext> { CallBase = true };
+        SynchronizationContext.SetSynchronizationContext(mockSync.Object);
+
+        var called = false;
+
+        // Act
+        AsyncHelper.RunSync(async ValueTask<int> (state) =>
+        {
+            await Task.Yield();
 
 #pragma warning disable 4014
-                DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
+            DelayedActionAsync(TimeSpan.FromMilliseconds(400), () => called = true);
 #pragma warning restore 4014
 
-                return 0;
-            }, 1);
+            return 0;
+        }, 1);
 
-            // Assert
+        // Assert
 
-            Assert.False(called);
+        Assert.False(called);
 
-            Thread.Sleep(500);
+        Thread.Sleep(500);
 
-            Assert.True(called);
+        Assert.True(called);
 
-            mockSync.Verify(
-                m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
-                Times.Once);
-        }
-
-        #endregion
-
-        #region Helpers
-
-        private static readonly AsyncLocal<int> asyncLocalField = new();
-
-        private static async Task DelayedActionAsync(TimeSpan delay, Action action)
-        {
-            await Task.Delay(delay);
-
-            action.Invoke();
-        }
-
-        #endregion
+        mockSync.Verify(
+            m => m.Post(It.IsAny<SendOrPostCallback>(), It.IsAny<object>()),
+            Times.Once);
     }
+
+    #endregion
+
+    #region Helpers
+
+    private static readonly AsyncLocal<int> asyncLocalField = new();
+
+    private static async Task DelayedActionAsync(TimeSpan delay, Action action)
+    {
+        await Task.Delay(delay);
+
+        action.Invoke();
+    }
+
+    private sealed class FakeSynchronizationContext : SynchronizationContext
+    {
+        public static IDisposable Install()
+        {
+            var previousContext = Current;
+            var fakeContext = new FakeSynchronizationContext();
+
+            SetSynchronizationContext(fakeContext);
+
+            return new RestoreContext(previousContext);
+        }
+
+        private sealed class RestoreContext(SynchronizationContext? context) : IDisposable
+        {
+            public void Dispose()
+            {
+                SetSynchronizationContext(context);
+            }
+        }
+    }
+
+    #endregion
 }

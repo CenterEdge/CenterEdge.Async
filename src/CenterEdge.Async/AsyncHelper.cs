@@ -14,6 +14,9 @@ namespace CenterEdge.Async;
 /// </remarks>
 public static class AsyncHelper
 {
+    [ThreadStatic]
+    private static bool t_InRunSync;
+
     // ValueTask-based overloads include OverloadResolutionPriority(-1) so that C# 13 and later will prefer the Task-based
     // overloads by default when both are applicable. This occurs when passing an async lambda directly to the RunSync method
     // without an explicit return type, for example:
@@ -33,6 +36,65 @@ public static class AsyncHelper
     private static bool IsDeadlockSafe(SynchronizationContext? currentSynchronizationContext) =>
         (currentSynchronizationContext is null || currentSynchronizationContext.GetType() == typeof(SynchronizationContext))
             && ReferenceEquals(TaskScheduler.Current, TaskScheduler.Default);
+
+    /// <summary>
+    /// Gets a value indicating whether the current operation is executing synchronously within a call to
+    /// <see cref="RunSync(Func{Task})"/> or a similar overload.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This will return <see langword="false"/> for nested operations that are running on the thread pool, such as
+    /// if <c>ConfigureAwait(false)</c> has been used and the continuation has moved to the thread pool.
+    /// </para>
+    /// <para>
+    /// If the calling thread has no synchronization context, this property will return <see langword="true"/> only
+    /// for the initial synchronous portion of the operation before any awaits that yield to the thread pool.
+    /// </para>
+    /// </remarks>
+    public static bool IsRunningSynchronously => t_InRunSync;
+
+    /// <summary>
+    /// If <see cref="IsRunningSynchronously"/> is <see langword="true"/>, gets the previously installed <see cref="SynchronizationContext"/>
+    /// that was replaced. Otherwise, returns <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// If operating within multiple nested calls to <see cref="RunSync(Func{Task})"/> or similar overloads, this method
+    /// recurses to the outermost context and returns the <see cref="SynchronizationContext"/> that was
+    /// replaced by the first call to <see cref="RunSync(Func{Task})"/> in the call stack. Always returns <see langword="null"/>
+    /// if the replaced context is the default <see cref="SynchronizationContext"/>.
+    /// </remarks>
+    public static SynchronizationContext? GetReplacedSynchronizationContext()
+    {
+        // This check isn't the same as the check for IsRunningSynchronously. When in the IsDeadlockSafe path
+        // t_InRunSync could be true while SynchronizationContext.Current is unchanged. However, that will
+        // only happen if there is no SynchronizationContext to begin with, in which case we want to return null anyway.
+
+        var context = SynchronizationContext.Current;
+        if (context is not ExclusiveSynchronizationContext exclusiveSynchronizationContext)
+        {
+            // Not running within RunSync
+            return null;
+        }
+
+        while (true)
+        {
+            var parentContext = exclusiveSynchronizationContext.ParentSynchronizationContext;
+            if (parentContext is ExclusiveSynchronizationContext parentExclusiveSynchronizationContext)
+            {
+                // Recurse to the outer context
+                exclusiveSynchronizationContext = parentExclusiveSynchronizationContext;
+            }
+            else
+            {
+                // Return the parent context, but only if it's not the default SynchronizationContext.
+                // This provides consistency with await behaviors, which revert the context to null after an
+                // await if the context is the default one.
+                return parentContext is not null && !ReferenceEquals(parentContext.GetType(), typeof(SynchronizationContext))
+                    ? parentContext
+                    : null;
+            }
+        }
+    }
 
     /// <summary>
     /// Executes an async <see cref="Task"/> method with no return value synchronously.
@@ -67,6 +129,8 @@ public static class AsyncHelper
             return; // unreachable, but helps static analysis
         }
 #endif
+
+        using var _ = EnterRunSync();
 
         var oldContext = SynchronizationContext.Current;
 
@@ -145,6 +209,8 @@ public static class AsyncHelper
             return; // unreachable, but helps static analysis
         }
 #endif
+
+        using var _ = EnterRunSync();
 
         var oldContext = SynchronizationContext.Current;
 
@@ -226,6 +292,8 @@ public static class AsyncHelper
         }
 #endif
 
+        using var _ = EnterRunSync();
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))
@@ -305,6 +373,8 @@ public static class AsyncHelper
         }
 #endif
 
+        using var _ = EnterRunSync();
+
         var oldContext = SynchronizationContext.Current;
 
         if (IsDeadlockSafe(oldContext))
@@ -335,6 +405,26 @@ public static class AsyncHelper
         finally
         {
             SynchronizationContext.SetSynchronizationContext(oldContext);
+        }
+    }
+
+    // Provides a lightweight mechanism for using statements to clean up the thread-static t_InRunSync flag.
+
+    private static InRunSyncCleanup EnterRunSync()
+    {
+        var previousState = t_InRunSync;
+        t_InRunSync = true;
+        return new InRunSyncCleanup(previousState);
+    }
+
+    private readonly ref struct InRunSyncCleanup(bool previousState) : IDisposable
+    {
+        public void Dispose()
+        {
+            if (!previousState)
+            {
+                t_InRunSync = false;
+            }
         }
     }
 }
